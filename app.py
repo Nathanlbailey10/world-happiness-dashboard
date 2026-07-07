@@ -65,21 +65,13 @@ COLOR_PALETTE = {
     "Latin America & Caribbean": "#59A14F",
     "North America": "#76B7B2",
     "Oceania": "#B07AA1",
+    "Global Average": "#1F3A8A",
     "Other": "#9D9D9D",
 }
 
 # -----------------------------
 # Columns used in dashboard
 # -----------------------------
-factors = [
-    "GDP per capita",
-    "Social support",
-    "Healthy life expectancy",
-    "Freedom to make life choices",
-    "Generosity",
-    "Perceptions of corruption"
-]
-
 correlation_variables = [
     "Happiness score",
     "GDP per capita",
@@ -101,7 +93,7 @@ short_labels = {
 }
 
 years = sorted(df["Year"].dropna().unique())
-geographic_groups = ["All geographic groups"] + sorted(df["Geographic_Group"].dropna().unique())
+geographic_groups = sorted(df["Geographic_Group"].dropna().unique())
 group_domain = sorted(df["Geographic_Group"].dropna().unique())
 group_range = [COLOR_PALETTE.get(group, "#999999") for group in group_domain]
 
@@ -128,21 +120,28 @@ year_range = st.sidebar.slider(
     step=1
 )
 start_year, end_year = year_range
-geographic_group = st.sidebar.selectbox("Geographic Group", geographic_groups)
-
-country_pool = df.copy()
-if geographic_group != "All geographic groups":
-    country_pool = country_pool[country_pool["Geographic_Group"] == geographic_group]
-
-country_options = sorted(country_pool["Country_Key"].dropna().unique().tolist())
-selected_countries = st.sidebar.multiselect(
-    "Countries to highlight (time trends)",
-    options=country_options,
-    placeholder="Optional"
+geographic_group = st.sidebar.selectbox(
+    "World Region",
+    geographic_groups,
+    index=None,
+    placeholder="All world regions"
 )
 
-factor = st.sidebar.selectbox("Compare happiness change with", factors)
-n_countries = st.sidebar.slider("Countries to show", 5, 20, 10)
+subregion_options = sorted(df["Region_Standardized"].dropna().unique().tolist())
+if geographic_group:
+    subregion_options = sorted(
+        df.loc[df["Geographic_Group"] == geographic_group, "Region_Standardized"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+subregion = st.sidebar.selectbox(
+    "Subregion",
+    subregion_options,
+    index=None,
+    placeholder="All subregions"
+)
 
 # -----------------------------
 # Section 1: Happiness trends
@@ -151,65 +150,126 @@ st.header("1. Happiness Trends Over Time")
 
 st.markdown(
     "Track average happiness over the selected year range. "
-    "Use the Geographic Group filter and optionally highlight countries."
+    "Use the World Region and Subregion filters and optionally highlight countries."
 )
 
-overview_data = df[df["Year"].between(start_year, end_year)].copy()
-if geographic_group != "All geographic groups":
-    overview_data = overview_data[overview_data["Geographic_Group"] == geographic_group]
+country_pool = df.copy()
+if geographic_group:
+    country_pool = country_pool[country_pool["Geographic_Group"] == geographic_group]
+if subregion:
+    country_pool = country_pool[country_pool["Region_Standardized"] == subregion]
 
-overview_baseline = (
-    overview_data
+country_options = sorted(country_pool["Country_Key"].dropna().unique().tolist())
+selected_countries = st.multiselect(
+    "Country",
+    options=country_options,
+    placeholder="All countries"
+)
+
+trend_data = df[df["Year"].between(start_year, end_year)].copy()
+
+global_avg = (
+    trend_data
     .groupby("Year", as_index=False)["Happiness score"]
     .mean()
     .rename(columns={"Happiness score": "Avg Score"})
 )
 
-if geographic_group == "All geographic groups":
-    baseline_name = "Global Average"
-else:
-    baseline_name = f"{geographic_group} Average"
-
-baseline_line = (
-    alt.Chart(overview_baseline)
-    .mark_line(strokeWidth=2.5, color="#1F3A8A", point=True)
+global_line = (
+    alt.Chart(global_avg)
+    .mark_line(
+        strokeWidth=1.5,
+        color=COLOR_PALETTE["Global Average"],
+        strokeDash=[4, 4],
+        point=True,
+        opacity=0.5
+    )
     .encode(
         x=alt.X("Year:O", title="Year"),
         y=alt.Y("Avg Score:Q", title="Happiness score", scale=alt.Scale(domain=[0, 10])),
         tooltip=[
             alt.Tooltip("Year:O", title="Year"),
-            alt.Tooltip("Avg Score:Q", title=baseline_name, format=".2f")
+            alt.Tooltip("Avg Score:Q", title="Global Avg.", format=".2f")
         ]
     )
 )
 
-chart_layers = [baseline_line]
+global_label = (
+    alt.Chart(global_avg.tail(1))
+    .mark_text(align="left", dx=8, fontSize=11, color=COLOR_PALETTE["Global Average"], opacity=0.5)
+    .encode(
+        x=alt.X("Year:O"),
+        y=alt.Y("Avg Score:Q"),
+        text=alt.value("Global Avg.")
+    )
+)
+
+trend_layers = [global_line, global_label]
+
+overlay_frames = []
+overlay_labels = []
+overlay_colors = []
+
+if geographic_group:
+    region_avg = (
+        trend_data[trend_data["Geographic_Group"] == geographic_group]
+        .groupby("Year", as_index=False)["Happiness score"]
+        .mean()
+        .rename(columns={"Happiness score": "Avg Score"})
+    )
+    if not region_avg.empty:
+        region_avg["Label"] = geographic_group
+        overlay_frames.append(region_avg)
+        overlay_labels.append(geographic_group)
+        overlay_colors.append(COLOR_PALETTE.get(geographic_group, "#999999"))
 
 if selected_countries:
-    highlighted_country_data = overview_data[
-        overview_data["Country_Key"].isin(selected_countries)
-    ]
+    country_lines_data = (
+        trend_data[trend_data["Country_Key"].isin(selected_countries)]
+        .loc[:, ["Year", "Country_Key", "Geographic_Group", "Region_Standardized", "Happiness score"]]
+        .rename(columns={"Country_Key": "Label", "Happiness score": "Avg Score"})
+    )
+    if not country_lines_data.empty:
+        overlay_frames.append(country_lines_data)
+        overlay_labels.extend(selected_countries)
+        default_country_colors = [
+            "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
+            "#9467bd", "#8c564b", "#e377c2", "#7f7f7f",
+            "#bcbd22", "#17becf"
+        ]
+        overlay_colors.extend(default_country_colors[:len(selected_countries)])
 
-    country_lines = (
-        alt.Chart(highlighted_country_data)
+if overlay_frames:
+    overlay_data = pd.concat(overlay_frames, ignore_index=True)
+    overlay_title = "World Region / Country"
+
+    overlay_line = (
+        alt.Chart(overlay_data)
         .mark_line(strokeWidth=2, point=True)
         .encode(
             x=alt.X("Year:O", title="Year"),
-            y=alt.Y("Happiness score:Q", title="Happiness score", scale=alt.Scale(domain=[0, 10])),
-            color=alt.Color("Country_Key:N", title="Country"),
+            y=alt.Y("Avg Score:Q", title="Happiness score", scale=alt.Scale(domain=[0, 10])),
+            strokeDash=alt.condition(
+                alt.datum.Label == geographic_group,
+                alt.value([6, 3]),
+                alt.value([1, 0])
+            ),
+            color=alt.Color(
+                "Label:N",
+                title=overlay_title,
+                scale=alt.Scale(domain=overlay_labels, range=overlay_colors)
+            ),
             tooltip=[
                 alt.Tooltip("Year:O", title="Year"),
-                alt.Tooltip("Country_Key:N", title="Country"),
-                alt.Tooltip("Geographic_Group:N", title="Geographic Group"),
-                alt.Tooltip("Region_Standardized:N", title="Region"),
-                alt.Tooltip("Happiness score:Q", title="Happiness score", format=".2f")
+                alt.Tooltip("Label:N", title="World Region / Country"),
+                alt.Tooltip("Avg Score:Q", title="Avg Score", format=".2f")
             ]
         )
     )
-    chart_layers.append(country_lines)
+    trend_layers.append(overlay_line)
 
 overview_chart = (
-    alt.layer(*chart_layers)
+    alt.layer(*trend_layers)
     .properties(height=420, title="Happiness Trajectories")
 )
 
@@ -224,8 +284,7 @@ st.header("2. Where Did Happiness Change the Most?")
 
 st.markdown(
     "This section compares countries between two selected years. "
-    "The bar chart shows the largest happiness increases and decreases, while the "
-    "scatterplot compares happiness change with change in the selected factor."
+    "The bar chart shows the largest happiness increases and decreases."
 )
 
 if start_year >= end_year:
@@ -234,28 +293,28 @@ if start_year >= end_year:
 
 filtered = df.copy()
 
-if geographic_group != "All geographic groups":
+if geographic_group:
     filtered = filtered[filtered["Geographic_Group"] == geographic_group]
+if subregion:
+    filtered = filtered[filtered["Region_Standardized"] == subregion]
 
 start_data = filtered[filtered["Year"] == start_year][
-    ["Country_Key", "Geographic_Group", "Region_Standardized", "Happiness score", factor]
+    ["Country_Key", "Geographic_Group", "Region_Standardized", "Happiness score"]
 ]
 
 end_data = filtered[filtered["Year"] == end_year][
-    ["Country_Key", "Geographic_Group", "Region_Standardized", "Happiness score", factor]
+    ["Country_Key", "Geographic_Group", "Region_Standardized", "Happiness score"]
 ]
 
 start_data = start_data.rename(
     columns={
-        "Happiness score": "Happiness_Start",
-        factor: "Factor_Start"
+        "Happiness score": "Happiness_Start"
     }
 )
 
 end_data = end_data.rename(
     columns={
-        "Happiness score": "Happiness_End",
-        factor: "Factor_End"
+        "Happiness score": "Happiness_End"
     }
 )
 
@@ -271,14 +330,6 @@ if change_data.empty:
 
 change_data["Happiness Change"] = (
     change_data["Happiness_End"] - change_data["Happiness_Start"]
-)
-
-change_data["Factor Change"] = (
-    change_data["Factor_End"] - change_data["Factor_Start"]
-)
-
-change_data["Change Direction"] = change_data["Happiness Change"].apply(
-    lambda value: "Increase" if value >= 0 else "Decrease"
 )
 
 st.subheader(f"Changes from {start_year} to {end_year}")
@@ -310,8 +361,11 @@ with top_left:
     st.subheader("Largest Happiness Changes")
     st.caption("Click a bar to select a country. Double-click empty chart space to clear selection.")
 
-    biggest_drops = change_data.nsmallest(n_countries, "Happiness Change")
-    biggest_gains = change_data.nlargest(n_countries, "Happiness Change")
+    if "n_countries" not in st.session_state:
+        st.session_state.n_countries = 10
+
+    biggest_drops = change_data.nsmallest(st.session_state.n_countries, "Happiness Change")
+    biggest_gains = change_data.nlargest(st.session_state.n_countries, "Happiness Change")
     bar_data = pd.concat([biggest_drops, biggest_gains])
     bar_data = bar_data.sort_values("Happiness Change")
 
@@ -349,8 +403,8 @@ with top_left:
             ),
             tooltip=[
                 alt.Tooltip("Country_Key:N", title="Country"),
-                alt.Tooltip("Geographic_Group:N", title="Geographic Group"),
-                alt.Tooltip("Region_Standardized:N", title="Region"),
+                alt.Tooltip("Geographic_Group:N", title="World Region"),
+                alt.Tooltip("Region_Standardized:N", title="Subregion"),
                 alt.Tooltip("Happiness_Start:Q", title=f"Happiness {start_year}", format=".2f"),
                 alt.Tooltip("Happiness_End:Q", title=f"Happiness {end_year}", format=".2f"),
                 alt.Tooltip("Happiness Change:Q", title="Happiness Change", format=".2f")
@@ -371,6 +425,13 @@ with top_left:
         selection_mode=["country_select"]
     )
 
+    st.slider(
+        "Countries to show",
+        5,
+        20,
+        key="n_countries"
+    )
+
     if isinstance(selection_state, dict):
         selected_payload = selection_state.get("selection", {}).get("country_select")
         if isinstance(selected_payload, list) and selected_payload:
@@ -386,11 +447,13 @@ with top_left:
 
 with top_right:
     st.subheader("Indexed Factor Trends")
+    st.caption("Click legend items to hide or show metrics and automatically rescale the y-axis.")
 
     trend_variables = [
         "Happiness score",
         "GDP per capita",
         "Social support",
+        "Healthy life expectancy",
         "Freedom to make life choices",
         "Generosity",
         "Perceptions of corruption"
@@ -405,13 +468,13 @@ with top_right:
             .mean()
         )
         trend_title = f"Selected country: {selected_country}"
-    elif geographic_group != "All geographic groups":
+    elif geographic_group:
         trend_data = (
             trend_data[trend_data["Geographic_Group"] == geographic_group]
             .groupby("Year", as_index=False)[trend_variables]
             .mean()
         )
-        trend_title = f"Geographic Group average: {geographic_group}"
+        trend_title = f"World Region average: {geographic_group}"
     else:
         trend_data = trend_data.groupby("Year", as_index=False)[trend_variables].mean()
         trend_title = "Global average"
@@ -440,8 +503,8 @@ with top_right:
         trend_long["Indexed Change"] = trend_long["Value"] - trend_long["Baseline"]
         trend_long["Metric Short"] = trend_long["Metric"].map(short_labels)
 
-        metric_order = trend_variables
-        metric_short_order = [short_labels[metric] for metric in metric_order]
+        factor_order = trend_variables[1:]
+        factor_short_order = [short_labels[metric] for metric in factor_order]
         metric_colors = [
             "#1F3A8A",
             "#4E79A7",
@@ -451,13 +514,36 @@ with top_right:
             "#76B7B2"
         ]
 
-        trend_base = alt.Chart(trend_long).encode(
+        factor_select = alt.selection_point(
+            fields=["Metric Short"],
+            bind="legend",
+            empty="all"
+        )
+
+        happiness_long = trend_long[trend_long["Metric"] == "Happiness score"].copy()
+        factor_long = trend_long[trend_long["Metric"] != "Happiness score"].copy()
+
+        happiness_line = (
+            alt.Chart(happiness_long)
+            .mark_line(strokeWidth=3, point=True, color=COLOR_PALETTE["Global Average"])
+            .encode(
+                x=alt.X("Year:O", title="Year"),
+                y=alt.Y("Indexed Change:Q", title=f"Change since {start_year}", scale=alt.Scale(zero=True)),
+                tooltip=[
+                    alt.Tooltip("Year:O", title="Year"),
+                    alt.Tooltip("Value:Q", title="Happiness score", format=".2f"),
+                    alt.Tooltip("Indexed Change:Q", title="Change from baseline", format=".2f")
+                ]
+            )
+        )
+
+        trend_base = alt.Chart(factor_long).encode(
             x=alt.X("Year:O", title="Year"),
             y=alt.Y("Indexed Change:Q", title=f"Change since {start_year}"),
             color=alt.Color(
                 "Metric Short:N",
-                sort=metric_short_order,
-                scale=alt.Scale(domain=metric_short_order, range=metric_colors),
+                sort=factor_short_order,
+                scale=alt.Scale(domain=factor_short_order, range=metric_colors),
                 title="Metric"
             )
         )
@@ -470,107 +556,23 @@ with top_right:
 
         trend_lines = (
             trend_base
-            .mark_line(point=True)
-            .encode(
-                size=alt.condition(
-                    alt.datum.Metric == "Happiness score",
-                    alt.value(3.5),
-                    alt.value(2)
-                ),
-                tooltip=[
-                    alt.Tooltip("Year:O", title="Year"),
-                    alt.Tooltip("Metric Short:N", title="Metric"),
-                    alt.Tooltip("Value:Q", title="Value", format=".2f"),
-                    alt.Tooltip("Indexed Change:Q", title="Change from baseline", format=".2f")
-                ]
-            )
+            .mark_line(strokeWidth=2, point=True)
+            .add_params(factor_select)
+            .transform_filter(factor_select)
+            .encode(tooltip=[
+                alt.Tooltip("Year:O", title="Year"),
+                alt.Tooltip("Metric Short:N", title="Metric"),
+                alt.Tooltip("Value:Q", title="Value", format=".2f"),
+                alt.Tooltip("Indexed Change:Q", title="Change from baseline", format=".2f")
+            ])
         )
 
         indexed_trend_chart = (
-            alt.layer(zero_rule, trend_lines)
+            alt.layer(zero_rule, happiness_line, trend_lines)
             .properties(height=600, title=trend_title)
         )
 
         st.altair_chart(indexed_trend_chart, use_container_width=True)
-
-st.subheader("Happiness Change vs. Factor Change")
-
-scatter_points = (
-    alt.Chart(change_data)
-    .mark_circle(size=70)
-    .encode(
-        x=alt.X("Factor Change:Q", title=f"Change in {factor}"),
-        y=alt.Y("Happiness Change:Q", title="Change in happiness score"),
-        color=alt.Color(
-            "Geographic_Group:N",
-            title="Geographic Group",
-            scale=alt.Scale(domain=group_domain, range=group_range)
-        ),
-        tooltip=[
-            alt.Tooltip("Country_Key:N", title="Country"),
-            alt.Tooltip("Geographic_Group:N", title="Geographic Group"),
-            alt.Tooltip("Region_Standardized:N", title="Region"),
-            alt.Tooltip("Happiness_Start:Q", title=f"Happiness {start_year}", format=".2f"),
-            alt.Tooltip("Happiness_End:Q", title=f"Happiness {end_year}", format=".2f"),
-            alt.Tooltip("Factor_Start:Q", title=f"{factor} {start_year}", format=".2f"),
-            alt.Tooltip("Factor_End:Q", title=f"{factor} {end_year}", format=".2f"),
-            alt.Tooltip("Factor Change:Q", title=f"{factor} Change", format=".2f"),
-            alt.Tooltip("Happiness Change:Q", title="Happiness Change", format=".2f")
-        ]
-    )
-)
-
-zero_vline = (
-    alt.Chart(pd.DataFrame({"Factor Change": [0]}))
-    .mark_rule(strokeDash=[6, 6], color="#666666")
-    .encode(x="Factor Change:Q")
-)
-
-zero_hline = (
-    alt.Chart(pd.DataFrame({"Happiness Change": [0]}))
-    .mark_rule(strokeDash=[6, 6], color="#666666")
-    .encode(y="Happiness Change:Q")
-)
-
-change_scatter = (
-    alt.layer(zero_vline, zero_hline, scatter_points)
-    .properties(height=500, title=f"Change in {factor} vs. Change in Happiness")
-)
-
-st.altair_chart(change_scatter, use_container_width=True)
-
-st.subheader("Country-Level Data")
-
-table = change_data[
-    [
-        "Country_Key",
-        "Geographic_Group",
-        "Region_Standardized",
-        "Happiness_Start",
-        "Happiness_End",
-        "Happiness Change",
-        "Factor_Start",
-        "Factor_End",
-        "Factor Change"
-    ]
-].rename(
-    columns={
-        "Country_Key": "Country",
-        "Geographic_Group": "Geographic Group",
-        "Region_Standardized": "Region",
-        "Happiness_Start": f"Happiness {start_year}",
-        "Happiness_End": f"Happiness {end_year}",
-        "Factor_Start": f"{factor} {start_year}",
-        "Factor_End": f"{factor} {end_year}",
-        "Factor Change": f"{factor} Change"
-    }
-)
-
-st.dataframe(
-    table.sort_values("Happiness Change", ascending=False),
-    use_container_width=True,
-    hide_index=True
-)
 
 # -----------------------------
 # Section 3: Correlation explorer
@@ -594,9 +596,14 @@ correlation_year = st.selectbox(
 
 correlation_data = df.copy()
 
-if geographic_group != "All geographic groups":
+if geographic_group:
     correlation_data = correlation_data[
         correlation_data["Geographic_Group"] == geographic_group
+    ]
+
+if subregion:
+    correlation_data = correlation_data[
+        correlation_data["Region_Standardized"] == subregion
     ]
 
 if correlation_year != "All years":
@@ -697,14 +704,14 @@ with scatter_col:
             y=alt.Y(f"{y_variable}:Q", title=y_variable),
             color=alt.Color(
                 "Geographic_Group:N",
-                title="Geographic Group",
+                title="World Region",
                 scale=alt.Scale(domain=group_domain, range=group_range)
             ),
             tooltip=[
                 alt.Tooltip("Country_Key:N", title="Country"),
                 alt.Tooltip("Year:O", title="Year"),
-                alt.Tooltip("Geographic_Group:N", title="Geographic Group"),
-                alt.Tooltip("Region_Standardized:N", title="Region"),
+                alt.Tooltip("Geographic_Group:N", title="World Region"),
+                alt.Tooltip("Region_Standardized:N", title="Subregion"),
                 alt.Tooltip(f"{x_variable}:Q", title=x_variable, format=".2f"),
                 alt.Tooltip(f"{y_variable}:Q", title=y_variable, format=".2f")
             ]
