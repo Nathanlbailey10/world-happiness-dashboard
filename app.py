@@ -95,7 +95,12 @@ short_labels = {
 }
 
 TREND_VARIABLES = [
-    *correlation_variables
+    "Happiness score",
+    "Social support",
+    "Healthy life expectancy",
+    "Freedom to make life choices",
+    "Generosity",
+    "Perceptions of corruption"
 ]
 
 
@@ -555,8 +560,7 @@ with top_right:
             "#F28E2B",
             "#E15759",
             "#76B7B2",
-            "#B07AA1",
-            "#9D9D9D"
+            "#B07AA1"
         ]
 
         # Start with every metric selected; legend clicks remove individual series from the view.
@@ -802,4 +806,9 @@ st.caption(
 st.caption(
     "The World Happiness Report is published by the Wellbeing Research Centre at the University of Oxford "
     "in partnership with Gallup, the UN Sustainable Development Solutions Network, and an independent editorial board."
+)
+
+st.caption(
+    "Note: the aggregated dataset uses inconsistent GDP definitions across years, so GDP per capita is excluded "
+    "from the Indexed Factor Trends chart because cross-year comparisons are not valid."
 )
