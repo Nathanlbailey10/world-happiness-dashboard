@@ -271,11 +271,11 @@ else:
         "height": 500,
         "autosize": "none",
         "signals": [
-            {"name": "tx", "update": "width / 2"},
-            {"name": "ty", "update": "height / 2"},
+            {"name": "tx", "update": "width / 2 - 160"},
+            {"name": "ty", "update": "height / 2 + 20"},
             {
                 "name": "scale",
-                "value": 150,
+                "value": 100,
                 "on": [
                     {
                         "events": {"type": "wheel", "filter": "event.ctrlKey || event.metaKey", "consume": True},
@@ -352,31 +352,38 @@ else:
         <style>
             .world-happiness-map-shell {{
                 font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                position: relative;
+                display: flex;
+                align-items: flex-start;
+                gap: 18px;
             }}
             .world-happiness-map-shell #world-happiness-map {{
+                flex: 1 1 auto;
                 margin-top: 0;
+                min-width: 0;
             }}
             .world-happiness-legend {{
                 display: flex;
                 flex-direction: column;
                 align-items: flex-start;
-                gap: 6px;
-                margin-top: 10px;
+                gap: 8px;
+                margin-top: 6px;
+                flex: 0 0 110px;
                 font-size: 12px;
                 color: #4b5563;
             }}
             .world-happiness-legend-row {{
                 display: flex;
+                flex-direction: column;
                 align-items: center;
-                gap: 12px;
+                gap: 10px;
                 width: 100%;
-                max-width: 320px;
             }}
             .world-happiness-legend-bar {{
-                width: 240px;
-                height: 12px;
+                width: 14px;
+                height: 240px;
                 border-radius: 999px;
-                background: linear-gradient(90deg, #F4ECF7 0%, #E2C7EA 25%, #C89ED8 50%, #A96CBF 75%, #7B2D8B 100%);
+                background: linear-gradient(to bottom, #7B2D8B 0%, #A96CBF 25%, #C89ED8 50%, #E2C7EA 75%, #F4ECF7 100%);
                 border: 1px solid rgba(0, 0, 0, 0.08);
             }}
             .world-happiness-legend-label {{
@@ -386,6 +393,7 @@ else:
             }}
             .world-happiness-legend-note {{
                 color: #6b7280;
+                text-align: center;
             }}
             .world-happiness-tooltip {{
                 position: absolute;
@@ -431,11 +439,10 @@ else:
             <div id="world-happiness-map"></div>
             <div class="world-happiness-legend" aria-label="Happiness score legend">
                 <div class="world-happiness-legend-row">
-                    <div class="world-happiness-legend-label">Lower happiness</div>
-                    <div class="world-happiness-legend-bar"></div>
                     <div class="world-happiness-legend-label">Higher happiness</div>
+                    <div class="world-happiness-legend-bar"></div>
+                    <div class="world-happiness-legend-label">Lower happiness</div>
                 </div>
-                # <div class="world-happiness-legend-note">Color intensity increases from low to high average happiness.</div>
             </div>
             <div id="world-happiness-tooltip" class="world-happiness-tooltip"></div>
         </div>
