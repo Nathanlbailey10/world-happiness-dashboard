@@ -394,7 +394,7 @@ else:
             <div style="
                 width: 560px;
                 max-width: 72%;
-                margin: 0 auto 14px auto;
+                margin: 0 auto 18px auto;
             ">
                 <div style="
                     display: flex;
@@ -429,15 +429,6 @@ else:
         st.altair_chart(
             map_chart,
             use_container_width=True
-        )
-
-    if geographic_group or subregion:
-        st.caption(
-            "The map automatically reframes to keep the full selected area visible."
-        )
-    else:
-        st.caption(
-            "The full world is shown on initial load."
         )
 
 # -----------------------------
