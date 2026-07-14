@@ -282,46 +282,6 @@ else:
         "countries"
     )
 
-    # Hand-tuned projection views for cleaner regional framing.
-    # Europe is centered tightly enough that Siberia no longer dominates.
-    projection_presets = {
-        "Africa": {
-            "type": "naturalEarth1",
-            "center": [20, 1],
-            "scale": 310
-        },
-        "Asia": {
-            "type": "naturalEarth1",
-            "center": [92, 28],
-            "scale": 205
-        },
-        "Europe": {
-            "type": "naturalEarth1",
-            "center": [16, 52],
-            "scale": 430
-        },
-        "Latin America & Caribbean": {
-            "type": "naturalEarth1",
-            "center": [-72, -14],
-            "scale": 245
-        },
-        "North America": {
-            "type": "naturalEarth1",
-            "center": [-103, 43],
-            "scale": 235
-        },
-        "Oceania": {
-            "type": "naturalEarth1",
-            "center": [145, -25],
-            "scale": 315
-        }
-    }
-
-    projection_settings = projection_presets.get(
-        geographic_group,
-        {"type": "naturalEarth1"}
-    )
-
     map_chart = (
         alt.Chart(world)
         .mark_geoshape(
@@ -348,6 +308,8 @@ else:
             color=alt.Color(
                 "avg_happiness:Q",
                 scale=alt.Scale(
+                    domain=[3, 8],
+                    clamp=True,
                     range=[
                         "#F4ECF7",
                         "#E2C7EA",
@@ -379,7 +341,7 @@ else:
             ]
         )
         .project(
-            **projection_settings
+            type="naturalEarth1"
         )
         .properties(
             height=560
@@ -389,15 +351,15 @@ else:
         )
     )
 
-    map_column, spacer_column = st.columns([7, 1])
+    map_column, spacer_column = st.columns([6, 1])
 
     with map_column:
         st.markdown(
             """
             <div style="
-                width: 590px;
+                width: 560px;
                 max-width: 72%;
-                margin: 0 auto 18px auto;
+                margin: 0 auto 8px auto;
             ">
                 <div style="
                     display: flex;
