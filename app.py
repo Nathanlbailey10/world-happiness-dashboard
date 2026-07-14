@@ -277,12 +277,12 @@ if not focus_group and subregion:
         focus_group = matching_groups[0]
 
 MAP_VIEW_PRESETS = {
-    "Africa": {"scale": 210, "rotate_x": -20, "center_y": 2},
-    "Asia": {"scale": 150, "rotate_x": -85, "center_y": 28},
-    "Europe": {"scale": 260, "rotate_x": -15, "center_y": 50},
-    "Latin America & Caribbean": {"scale": 170, "rotate_x": 70, "center_y": -12},
-    "North America": {"scale": 180, "rotate_x": 105, "center_y": 42},
-    "Oceania": {"scale": 170, "rotate_x": -145, "center_y": -25},
+    "Africa": {"scale": 320, "rotate_x": -20, "center_y": 3},
+    "Asia": {"scale": 225, "rotate_x": -85, "center_y": 28},
+    "Europe": {"scale": 480, "rotate_x": -15, "center_y": 52},
+    "Latin America & Caribbean": {"scale": 300, "rotate_x": 70, "center_y": -12},
+    "North America": {"scale": 280, "rotate_x": 105, "center_y": 42},
+    "Oceania": {"scale": 275, "rotate_x": -145, "center_y": -25},
 }
 
 map_view = MAP_VIEW_PRESETS.get(
