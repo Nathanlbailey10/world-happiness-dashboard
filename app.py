@@ -289,7 +289,8 @@ else:
     if subregion == "Eastern Europe":
         projection_settings = {
             "type": "naturalEarth1",
-            "center": [31, 53],
+            "rotate": [-55, 0, 0],
+            "center": [0, 53],
             "scale": 455
         }
         clip_map = True
@@ -305,7 +306,8 @@ else:
     elif geographic_group == "Europe" and not subregion:
         projection_settings = {
             "type": "naturalEarth1",
-            "center": [26, 53],
+            "rotate": [-42, 0, 0],
+            "center": [0, 53],
             "scale": 355
         }
         clip_map = True
