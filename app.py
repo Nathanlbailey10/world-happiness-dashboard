@@ -282,17 +282,34 @@ else:
         "countries"
     )
 
-    # Let Altair automatically fit the selected geometry for the world,
-    # all non-Europe regions, and every subregion.
-    # Europe gets one restrained framing so Russia does not pull the map
-    # far to the right; far-eastern Russia is clipped from this regional view.
-    if geographic_group == "Europe" and not subregion:
+    # Most selections use Altair's automatic fit.
+    # These Europe views need manual framing because:
+    # - Russia pulls Eastern Europe far to the right.
+    # - France's overseas geometry pulls Western Europe far off-center.
+    if subregion == "Eastern Europe":
         projection_settings = {
             "type": "naturalEarth1",
-            "center": [38, 54],
-            "scale": 360
+            "center": [31, 53],
+            "scale": 455
         }
         clip_map = True
+
+    elif subregion == "Western Europe":
+        projection_settings = {
+            "type": "naturalEarth1",
+            "center": [5, 49],
+            "scale": 650
+        }
+        clip_map = True
+
+    elif geographic_group == "Europe" and not subregion:
+        projection_settings = {
+            "type": "naturalEarth1",
+            "center": [26, 53],
+            "scale": 355
+        }
+        clip_map = True
+
     else:
         projection_settings = {
             "type": "naturalEarth1"
