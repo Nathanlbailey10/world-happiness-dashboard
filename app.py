@@ -282,51 +282,29 @@ else:
         "countries"
     )
 
-    # Hand-tuned projection views for cleaner regional framing.
-    # Europe is centered tightly enough that Siberia no longer dominates.
-    projection_presets = {
-        "Africa": {
+    # Let Altair automatically fit the selected geometry for the world,
+    # all non-Europe regions, and every subregion.
+    # Europe gets one restrained framing so Russia does not pull the map
+    # far to the right; far-eastern Russia is clipped from this regional view.
+    if geographic_group == "Europe" and not subregion:
+        projection_settings = {
             "type": "naturalEarth1",
-            "center": [20, 1],
-            "scale": 310
-        },
-        "Asia": {
-            "type": "naturalEarth1",
-            "center": [92, 28],
-            "scale": 205
-        },
-        "Europe": {
-            "type": "naturalEarth1",
-            "center": [16, 52],
-            "scale": 430
-        },
-        "Latin America & Caribbean": {
-            "type": "naturalEarth1",
-            "center": [-72, -14],
-            "scale": 245
-        },
-        "North America": {
-            "type": "naturalEarth1",
-            "center": [-103, 43],
-            "scale": 235
-        },
-        "Oceania": {
-            "type": "naturalEarth1",
-            "center": [145, -25],
-            "scale": 315
+            "center": [38, 54],
+            "scale": 360
         }
-    }
-
-    projection_settings = projection_presets.get(
-        geographic_group,
-        {"type": "naturalEarth1"}
-    )
+        clip_map = True
+    else:
+        projection_settings = {
+            "type": "naturalEarth1"
+        }
+        clip_map = False
 
     map_chart = (
         alt.Chart(world)
         .mark_geoshape(
             stroke="white",
-            strokeWidth=0.65
+            strokeWidth=0.65,
+            clip=clip_map
         )
         .transform_lookup(
             lookup="id",
@@ -391,15 +369,15 @@ else:
         )
     )
 
-    map_column, spacer_column = st.columns([7, 1])
+    map_column, spacer_column = st.columns([6, 1])
 
     with map_column:
         st.markdown(
             """
             <div style="
-                width: 590px;
+                width: 560px;
                 max-width: 72%;
-                margin: 0 auto 18px auto;
+                margin: 0 auto 14px auto;
             ">
                 <div style="
                     display: flex;
