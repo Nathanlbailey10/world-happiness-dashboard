@@ -342,21 +342,28 @@ else:
             type="naturalEarth1"
         )
         .properties(
-            height=540
+            height=560
+        )
+        .configure_view(
+            strokeWidth=0
         )
     )
 
-    map_column, spacer_column = st.columns([4, 1])
+    map_column, spacer_column = st.columns([6, 1])
 
     with map_column:
         st.markdown(
             """
-            <div style="max-width: 620px; margin: 0 0 6px 0;">
+            <div style="
+                width: 560px;
+                max-width: 72%;
+                margin: 0 auto 8px auto;
+            ">
                 <div style="
                     display: flex;
                     justify-content: space-between;
                     margin-bottom: 5px;
-                    font-size: 0.82rem;
+                    font-size: 0.80rem;
                     font-weight: 600;
                     color: #4b5563;
                 ">
@@ -365,7 +372,7 @@ else:
                 </div>
                 <div style="
                     width: 100%;
-                    height: 16px;
+                    height: 14px;
                     border-radius: 999px;
                     background: linear-gradient(
                         to right,
