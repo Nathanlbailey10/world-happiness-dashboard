@@ -247,79 +247,126 @@ country_map_data = (
         "Region_Standardized": "subregion"
     })
 )
-country_map_data["country_code"] = country_map_data["Country"].apply(country_name_to_numeric_code)
+
+country_map_data["country_code"] = country_map_data["Country"].apply(
+    country_name_to_numeric_code
+)
 country_map_data = country_map_data.dropna(subset=["country_code"]).copy()
+
 if not country_map_data.empty:
     country_map_data["country_code"] = country_map_data["country_code"].astype(int)
     map_happiness_min = float(country_map_data["avg_happiness"].min())
     map_happiness_max = float(country_map_data["avg_happiness"].max())
+
     if map_happiness_min == map_happiness_max:
         map_happiness_min -= 0.01
         map_happiness_max += 0.01
 
 world_countries_url = alt.datasets.url("world_110m")
 
-# Choose a sensible starting view for the selected region.
-# Streamlit reruns this section whenever the sidebar filters change.
-focus_group = geographic_group
+MAP_VIEW_PRESETS = {
+    "Africa": {"scale": 150, "rotate_x": -18, "center_y": 2},
+    "Asia": {"scale": 118, "rotate_x": -83, "center_y": 25},
+    "Europe": {"scale": 205, "rotate_x": -15, "center_y": 50},
+    "Latin America & Caribbean": {"scale": 135, "rotate_x": 72, "center_y": -12},
+    "North America": {"scale": 145, "rotate_x": 102, "center_y": 40},
+    "Oceania": {"scale": 145, "rotate_x": -145, "center_y": -23},
+}
 
+focus_group = geographic_group
 if not focus_group and subregion:
-    matching_groups = (
-        df.loc[
-            df["Region_Standardized"] == subregion,
-            "Geographic_Group"
-        ]
+    matches = (
+        df.loc[df["Region_Standardized"] == subregion, "Geographic_Group"]
         .dropna()
         .unique()
         .tolist()
     )
-    if matching_groups:
-        focus_group = matching_groups[0]
-
-MAP_VIEW_PRESETS = {
-    "Africa": {"scale": 320, "rotate_x": -20, "center_y": 3},
-    "Asia": {"scale": 225, "rotate_x": -85, "center_y": 28},
-    "Europe": {"scale": 480, "rotate_x": -15, "center_y": 52},
-    "Latin America & Caribbean": {"scale": 300, "rotate_x": 70, "center_y": -12},
-    "North America": {"scale": 280, "rotate_x": 105, "center_y": 42},
-    "Oceania": {"scale": 275, "rotate_x": -145, "center_y": -25},
-}
+    if matches:
+        focus_group = matches[0]
 
 map_view = MAP_VIEW_PRESETS.get(
     focus_group,
-    {"scale": 160, "rotate_x": 0, "center_y": 0}
+    {"scale": 100, "rotate_x": 0, "center_y": 0}
 )
 
 if country_map_data.empty:
     st.info("No country data available for the selected filters.")
 else:
     world_data = country_map_data.to_dict(orient="records")
+
     map_spec = {
         "$schema": "https://vega.github.io/schema/vega/v6.json",
         "description": "Interactive world happiness choropleth with pan and zoom.",
-        "width": 1040,
-        "height": 600,
+        "width": 900,
+        "height": 500,
         "autosize": "none",
         "signals": [
             {"name": "tx", "update": "width / 2"},
-            {"name": "ty", "update": "height / 2 + 10"},
+            {"name": "ty", "update": "height / 2 + 6"},
             {
                 "name": "scale",
                 "value": map_view["scale"],
                 "on": [
                     {
-                        "events": {"type": "wheel", "filter": "event.ctrlKey || event.metaKey", "consume": True},
-                        "update": "clamp(scale * pow(1.0005, -event.deltaY * pow(16, event.deltaMode)), 40, 3000)"
+                        "events": {
+                            "type": "wheel",
+                            "filter": "event.ctrlKey || event.metaKey",
+                            "consume": True
+                        },
+                        "update": (
+                            "clamp(scale * pow(1.0005, "
+                            "-event.deltaY * pow(16, event.deltaMode)), 40, 3000)"
+                        )
                     }
                 ]
             },
-            {"name": "angles", "value": [0, 0], "on": [{"events": "pointerdown", "update": "[rotateX, centerY]"}]},
-            {"name": "cloned", "value": None, "on": [{"events": "pointerdown", "update": "copy('projection')"}]},
-            {"name": "start", "value": None, "on": [{"events": "pointerdown", "update": "invert(cloned, xy())"}]},
-            {"name": "drag", "value": None, "on": [{"events": "[pointerdown, window:pointerup] > window:pointermove", "update": "invert(cloned, xy())"}]},
-            {"name": "delta", "value": None, "on": [{"events": {"signal": "drag"}, "update": "[drag[0] - start[0], start[1] - drag[1]]"}]},
-            {"name": "rotateX", "value": map_view["rotate_x"], "on": [{"events": {"signal": "delta"}, "update": "angles[0] + delta[0]"}]},
-            {"name": "centerY", "value": map_view["center_y"], "on": [{"events": {"signal": "delta"}, "update": "clamp(angles[1] + delta[1], -60, 60)"}]},
+            {
+                "name": "angles",
+                "value": [map_view["rotate_x"], map_view["center_y"]],
+                "on": [{"events": "pointerdown", "update": "[rotateX, centerY]"}]
+            },
+            {
+                "name": "cloned",
+                "value": None,
+                "on": [{"events": "pointerdown", "update": "copy('projection')"}]
+            },
+            {
+                "name": "start",
+                "value": None,
+                "on": [{"events": "pointerdown", "update": "invert(cloned, xy())"}]
+            },
+            {
+                "name": "drag",
+                "value": None,
+                "on": [{
+                    "events": "[pointerdown, window:pointerup] > window:pointermove",
+                    "update": "invert(cloned, xy())"
+                }]
+            },
+            {
+                "name": "delta",
+                "value": None,
+                "on": [{
+                    "events": {"signal": "drag"},
+                    "update": "[drag[0] - start[0], start[1] - drag[1]]"
+                }]
+            },
+            {
+                "name": "rotateX",
+                "value": map_view["rotate_x"],
+                "on": [{
+                    "events": {"signal": "delta"},
+                    "update": "angles[0] + delta[0]"
+                }]
+            },
+            {
+                "name": "centerY",
+                "value": map_view["center_y"],
+                "on": [{
+                    "events": {"signal": "delta"},
+                    "update": "clamp(angles[1] + delta[1], -60, 60)"
+                }]
+            },
         ],
         "projections": [
             {
@@ -358,10 +405,19 @@ else:
                         "strokeWidth": {"value": 0.5},
                         "stroke": {"value": "white"},
                         "fill": {
-                            "signal": "datum.avg_happiness == null ? '#EFEFEF' : scale('color', datum.avg_happiness)"
+                            "signal": (
+                                "datum.avg_happiness == null ? '#EFEFEF' "
+                                ": scale('color', datum.avg_happiness)"
+                            )
                         },
                         "tooltip": {
-                            "signal": "datum.avg_happiness == null ? null : {'Country': datum.Country, 'Avg happiness': format(datum.avg_happiness, '.2f'), 'World region': datum.world_region, 'Subregion': datum.subregion}"
+                            "signal": (
+                                "datum.avg_happiness == null ? null : "
+                                "{'Country': datum.Country, "
+                                "'Avg happiness': format(datum.avg_happiness, '.2f'), "
+                                "'World region': datum.world_region, "
+                                "'Subregion': datum.subregion}"
+                            )
                         },
                     }
                 },
@@ -379,154 +435,200 @@ else:
     }
 
     map_html = f"""
-        <style>
-            .world-happiness-map-shell {{
-                font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-                position: relative;
-                display: flex;
-                align-items: flex-start;
-                gap: 18px;
-            }}
-            .world-happiness-map-shell #world-happiness-map {{
-                flex: 1 1 auto;
-                margin-top: 0;
-                min-width: 0;
-            }}
-            .world-happiness-legend {{
-                display: flex;
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 8px;
-                margin-top: 6px;
-                flex: 0 0 110px;
-                font-size: 12px;
-                color: #4b5563;
-            }}
-            .world-happiness-legend-row {{
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                gap: 10px;
-                width: 100%;
-            }}
-            .world-happiness-legend-bar {{
-                width: 14px;
-                height: 240px;
-                border-radius: 999px;
-                background: linear-gradient(to bottom, #7B2D8B 0%, #A96CBF 25%, #C89ED8 50%, #E2C7EA 75%, #F4ECF7 100%);
-                border: 1px solid rgba(0, 0, 0, 0.08);
-            }}
-            .world-happiness-legend-label {{
-                white-space: nowrap;
-                font-weight: 600;
-                color: #374151;
-            }}
-            .world-happiness-legend-note {{
-                color: #6b7280;
-                text-align: center;
-            }}
-            .world-happiness-tooltip {{
-                position: absolute;
-                pointer-events: none;
-                z-index: 20;
-                display: none;
-                max-width: 260px;
-                background: rgba(255, 255, 255, 0.92);
-                color: #111827;
-                border: 1px solid rgba(17, 24, 39, 0.12);
-                border-radius: 6px;
-                padding: 8px 10px;
-                box-shadow: 0 6px 18px rgba(15, 23, 42, 0.14);
-                font-size: 12px;
-                line-height: 1.3;
-                backdrop-filter: blur(4px);
-                -webkit-backdrop-filter: blur(4px);
-            }}
-            .world-happiness-tooltip-title {{
-                display: block;
-                margin-bottom: 6px;
-                font-size: 13px;
-                font-weight: 600;
-                color: #111827;
-            }}
-            .world-happiness-tooltip-row {{
-                display: flex;
-                justify-content: space-between;
-                gap: 12px;
-                margin-top: 2px;
-            }}
-            .world-happiness-tooltip-label {{
-                color: #6b7280;
-                white-space: nowrap;
-            }}
-            .world-happiness-tooltip-value {{
-                color: #111827;
-                text-align: right;
-                font-weight: 500;
-            }}
-        </style>
-        <div class="world-happiness-map-shell">
-            <div id="world-happiness-map"></div>
-            <div class="world-happiness-legend" aria-label="Happiness score legend">
-                <div class="world-happiness-legend-row">
-                    <div class="world-happiness-legend-label">Higher happiness</div>
-                    <div class="world-happiness-legend-bar"></div>
-                    <div class="world-happiness-legend-label">Lower happiness</div>
-                </div>
+    <style>
+        html, body {{
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            overflow: hidden;
+        }}
+
+        .world-happiness-map-shell {{
+            width: 100%;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            position: relative;
+        }}
+
+        .world-happiness-legend {{
+            width: min(520px, 80%);
+            margin: 2px auto 8px auto;
+            font-size: 12px;
+            color: #374151;
+        }}
+
+        .world-happiness-legend-labels {{
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }}
+
+        .world-happiness-legend-bar {{
+            width: 100%;
+            height: 14px;
+            border-radius: 999px;
+            background: linear-gradient(
+                to right,
+                #F4ECF7 0%,
+                #E2C7EA 25%,
+                #C89ED8 50%,
+                #A96CBF 75%,
+                #7B2D8B 100%
+            );
+            border: 1px solid rgba(0, 0, 0, 0.08);
+        }}
+
+        #world-happiness-map {{
+            width: 100%;
+            min-width: 0;
+        }}
+
+        #world-happiness-map canvas,
+        #world-happiness-map svg {{
+            display: block;
+        }}
+
+        .world-happiness-tooltip {{
+            position: absolute;
+            pointer-events: none;
+            z-index: 20;
+            display: none;
+            max-width: 260px;
+            background: rgba(255, 255, 255, 0.94);
+            color: #111827;
+            border: 1px solid rgba(17, 24, 39, 0.12);
+            border-radius: 6px;
+            padding: 8px 10px;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.14);
+            font-size: 12px;
+            line-height: 1.3;
+        }}
+
+        .world-happiness-tooltip-title {{
+            display: block;
+            margin-bottom: 6px;
+            font-size: 13px;
+            font-weight: 600;
+        }}
+
+        .world-happiness-tooltip-row {{
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 2px;
+        }}
+
+        .world-happiness-tooltip-label {{
+            color: #6b7280;
+            white-space: nowrap;
+        }}
+
+        .world-happiness-tooltip-value {{
+            text-align: right;
+            font-weight: 500;
+        }}
+    </style>
+
+    <div class="world-happiness-map-shell">
+        <div class="world-happiness-legend" aria-label="Happiness score legend">
+            <div class="world-happiness-legend-labels">
+                <span>Lower happiness</span>
+                <span>Higher happiness</span>
             </div>
-            <div id="world-happiness-tooltip" class="world-happiness-tooltip"></div>
+            <div class="world-happiness-legend-bar"></div>
         </div>
-    <script src=\"https://cdn.jsdelivr.net/npm/vega@6\"></script>
+
+        <div id="world-happiness-map"></div>
+        <div id="world-happiness-tooltip" class="world-happiness-tooltip"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/vega@6"></script>
     <script>
-            const mount = document.getElementById('world-happiness-map');
-                        const tooltip = document.getElementById('world-happiness-tooltip');
-                        const formatTooltip = (value) => {{
-                                if (value == null) {{
-                                        tooltip.style.display = 'none';
-                                        return;
-                                }}
+        const mount = document.getElementById('world-happiness-map');
+        const tooltip = document.getElementById('world-happiness-tooltip');
 
-                                const rows = [];
-                                if (value['Avg happiness'] != null) rows.push(['Avg happiness', value['Avg happiness']]);
-                                if (value['World region']) rows.push(['World region', value['World region']]);
-                                if (value.Subregion) rows.push(['Subregion', value.Subregion]);
-                                tooltip.innerHTML = '<div class="world-happiness-tooltip-title">' + value.Country + '</div>' + rows.map(([label, rowValue]) => '<div class="world-happiness-tooltip-row"><span class="world-happiness-tooltip-label">' + label + '</span><span class="world-happiness-tooltip-value">' + rowValue + '</span></div>').join('');
-                        }};
-            try {{
-                const spec = {json.dumps(map_spec)};
-                const runtime = vega.parse(spec);
-                                const view = new vega.View(runtime, {{
-                                        renderer: 'canvas',
-                                        container: '#world-happiness-map',
-                                        hover: true,
-                                        tooltip: function(handler, event, item, value) {{
-                                                if (!value) {{
-                                                        tooltip.style.display = 'none';
-                                                        return;
-                                                }}
-
-                                                formatTooltip(value);
-                                                tooltip.style.display = 'block';
-                                                const rect = mount.getBoundingClientRect();
-                                                const x = event.clientX - rect.left + 14;
-                                                const y = event.clientY - rect.top + 14;
-                                                tooltip.style.left = x + 'px';
-                                                tooltip.style.top = y + 'px';
-                                        }}
-                                }});
-                view.runAsync().catch((error) => {{
-                    mount.innerHTML = '<pre style="color:#b00020; white-space:pre-wrap;">' + String(error && error.stack ? error.stack : error) + '</pre>';
-                }});
-                                mount.addEventListener('mouseleave', () => {{
-                                        tooltip.style.display = 'none';
-                                }});
-            }} catch (error) {{
-                mount.innerHTML = '<pre style="color:#b00020; white-space:pre-wrap;">' + String(error && error.stack ? error.stack : error) + '</pre>';
+        const formatTooltip = (value) => {{
+            if (value == null) {{
+                tooltip.style.display = 'none';
+                return;
             }}
+
+            const rows = [];
+            if (value['Avg happiness'] != null) {{
+                rows.push(['Avg happiness', value['Avg happiness']]);
+            }}
+            if (value['World region']) {{
+                rows.push(['World region', value['World region']]);
+            }}
+            if (value.Subregion) {{
+                rows.push(['Subregion', value.Subregion]);
+            }}
+
+            tooltip.innerHTML =
+                '<div class="world-happiness-tooltip-title">' +
+                value.Country +
+                '</div>' +
+                rows.map(([label, rowValue]) =>
+                    '<div class="world-happiness-tooltip-row">' +
+                    '<span class="world-happiness-tooltip-label">' + label + '</span>' +
+                    '<span class="world-happiness-tooltip-value">' + rowValue + '</span>' +
+                    '</div>'
+                ).join('');
+        }};
+
+        try {{
+            const spec = {json.dumps(map_spec)};
+            const runtime = vega.parse(spec);
+
+            const view = new vega.View(runtime, {{
+                renderer: 'canvas',
+                container: '#world-happiness-map',
+                hover: true,
+                tooltip: function(handler, event, item, value) {{
+                    if (!value) {{
+                        tooltip.style.display = 'none';
+                        return;
+                    }}
+
+                    formatTooltip(value);
+                    tooltip.style.display = 'block';
+
+                    const shell = document.querySelector('.world-happiness-map-shell');
+                    const rect = shell.getBoundingClientRect();
+
+                    tooltip.style.left = (event.clientX - rect.left + 14) + 'px';
+                    tooltip.style.top = (event.clientY - rect.top + 14) + 'px';
+                }}
+            }});
+
+            const resizeMap = () => {{
+                const width = Math.max(320, Math.floor(mount.clientWidth));
+                view.width(width).height(500).runAsync();
+            }};
+
+            view.runAsync().then(resizeMap).catch((error) => {{
+                mount.innerHTML =
+                    '<pre style="color:#b00020; white-space:pre-wrap;">' +
+                    String(error && error.stack ? error.stack : error) +
+                    '</pre>';
+            }});
+
+            const observer = new ResizeObserver(resizeMap);
+            observer.observe(mount);
+
+            mount.addEventListener('mouseleave', () => {{
+                tooltip.style.display = 'none';
+            }});
+        }} catch (error) {{
+            mount.innerHTML =
+                '<pre style="color:#b00020; white-space:pre-wrap;">' +
+                String(error && error.stack ? error.stack : error) +
+                '</pre>';
+        }}
     </script>
     """
 
-    components.html(map_html, height=660, scrolling=False)
+    components.html(map_html, height=565, scrolling=False)
     st.caption("Tip: hold Ctrl on Windows/Linux or Cmd on Mac while scrolling to zoom; drag to pan.")
 
 # -----------------------------
