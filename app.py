@@ -263,151 +263,110 @@ if not country_map_data.empty:
         map_happiness_max += 0.01
 
 world_countries_url = alt.datasets.url("world_110m")
-
-MAP_VIEW_PRESETS = {
-    "Africa": {"scale": 150, "rotate_x": -18, "center_y": 2},
-    "Asia": {"scale": 118, "rotate_x": -83, "center_y": 25},
-    "Europe": {"scale": 205, "rotate_x": -15, "center_y": 50},
-    "Latin America & Caribbean": {"scale": 135, "rotate_x": 72, "center_y": -12},
-    "North America": {"scale": 145, "rotate_x": 102, "center_y": 40},
-    "Oceania": {"scale": 145, "rotate_x": -145, "center_y": -23},
-}
-
-focus_group = geographic_group
-if not focus_group and subregion:
-    matches = (
-        df.loc[df["Region_Standardized"] == subregion, "Geographic_Group"]
-        .dropna()
-        .unique()
-        .tolist()
-    )
-    if matches:
-        focus_group = matches[0]
-
-map_view = MAP_VIEW_PRESETS.get(
-    focus_group,
-    {"scale": 100, "rotate_x": 0, "center_y": 0}
-)
+filtered_map_view = bool(geographic_group or subregion)
 
 if country_map_data.empty:
     st.info("No country data available for the selected filters.")
 else:
     world_data = country_map_data.to_dict(orient="records")
 
+    fit_transform = []
+    if filtered_map_view:
+        fit_transform = [
+            {
+                "type": "filter",
+                "expr": "datum.avg_happiness != null"
+            }
+        ]
+
     map_spec = {
         "$schema": "https://vega.github.io/schema/vega/v6.json",
-        "description": "Interactive world happiness choropleth with pan and zoom.",
+        "description": "Responsive world happiness choropleth.",
         "width": 900,
         "height": 500,
         "autosize": "none",
-        "signals": [
-            {"name": "tx", "update": "width / 2"},
-            {"name": "ty", "update": "height / 2 + 6"},
-            {
-                "name": "scale",
-                "value": map_view["scale"],
-                "on": [
-                    {
-                        "events": {
-                            "type": "wheel",
-                            "filter": "event.ctrlKey || event.metaKey",
-                            "consume": True
-                        },
-                        "update": (
-                            "clamp(scale * pow(1.0005, "
-                            "-event.deltaY * pow(16, event.deltaMode)), 40, 3000)"
-                        )
-                    }
-                ]
-            },
-            {
-                "name": "angles",
-                "value": [map_view["rotate_x"], map_view["center_y"]],
-                "on": [{"events": "pointerdown", "update": "[rotateX, centerY]"}]
-            },
-            {
-                "name": "cloned",
-                "value": None,
-                "on": [{"events": "pointerdown", "update": "copy('projection')"}]
-            },
-            {
-                "name": "start",
-                "value": None,
-                "on": [{"events": "pointerdown", "update": "invert(cloned, xy())"}]
-            },
-            {
-                "name": "drag",
-                "value": None,
-                "on": [{
-                    "events": "[pointerdown, window:pointerup] > window:pointermove",
-                    "update": "invert(cloned, xy())"
-                }]
-            },
-            {
-                "name": "delta",
-                "value": None,
-                "on": [{
-                    "events": {"signal": "drag"},
-                    "update": "[drag[0] - start[0], start[1] - drag[1]]"
-                }]
-            },
-            {
-                "name": "rotateX",
-                "value": map_view["rotate_x"],
-                "on": [{
-                    "events": {"signal": "delta"},
-                    "update": "angles[0] + delta[0]"
-                }]
-            },
-            {
-                "name": "centerY",
-                "value": map_view["center_y"],
-                "on": [{
-                    "events": {"signal": "delta"},
-                    "update": "clamp(angles[1] + delta[1], -60, 60)"
-                }]
-            },
-        ],
-        "projections": [
-            {
-                "name": "projection",
-                "type": "mercator",
-                "scale": {"signal": "scale"},
-                "rotate": [{"signal": "rotateX"}, 0, 0],
-                "center": [0, {"signal": "centerY"}],
-                "translate": [{"signal": "tx"}, {"signal": "ty"}],
-            }
-        ],
+        "padding": 0,
         "data": [
-            {"name": "country_data", "values": world_data},
+            {
+                "name": "country_data",
+                "values": world_data
+            },
             {
                 "name": "world",
                 "url": world_countries_url,
-                "format": {"type": "topojson", "feature": "countries"},
+                "format": {
+                    "type": "topojson",
+                    "feature": "countries"
+                },
                 "transform": [
                     {
                         "type": "lookup",
                         "from": "country_data",
                         "key": "country_code",
                         "fields": ["id"],
-                        "values": ["Country", "avg_happiness", "world_region", "subregion"],
-                        "as": ["Country", "avg_happiness", "world_region", "subregion"],
+                        "values": [
+                            "Country",
+                            "avg_happiness",
+                            "world_region",
+                            "subregion"
+                        ],
+                        "as": [
+                            "Country",
+                            "avg_happiness",
+                            "world_region",
+                            "subregion"
+                        ]
                     }
-                ],
+                ]
             },
+            {
+                "name": "fit_world",
+                "source": "world",
+                "transform": fit_transform
+            }
+        ],
+        "projections": [
+            {
+                "name": "projection",
+                "type": "naturalEarth1",
+                "fit": {
+                    "signal": "data('fit_world')"
+                },
+                "extent": [
+                    [24, 18],
+                    [
+                        {"signal": "width - 24"},
+                        {"signal": "height - 18"}
+                    ]
+                ]
+            }
         ],
         "marks": [
             {
                 "type": "shape",
-                "from": {"data": "world"},
+                "from": {
+                    "data": "world"
+                },
                 "encode": {
                     "enter": {
-                        "strokeWidth": {"value": 0.5},
-                        "stroke": {"value": "white"},
+                        "strokeWidth": {
+                            "value": 0.55
+                        },
+                        "stroke": {
+                            "value": "white"
+                        },
                         "fill": {
                             "signal": (
-                                "datum.avg_happiness == null ? '#EFEFEF' "
+                                "datum.avg_happiness == null "
+                                "? '#F0F0F0' "
                                 ": scale('color', datum.avg_happiness)"
+                            )
+                        },
+                        "fillOpacity": {
+                            "signal": (
+                                "datum.avg_happiness == null "
+                                f"? {0.10 if filtered_map_view else 1.0} "
+                                ": 1"
                             )
                         },
                         "tooltip": {
@@ -418,20 +377,34 @@ else:
                                 "'World region': datum.world_region, "
                                 "'Subregion': datum.subregion}"
                             )
-                        },
+                        }
                     }
                 },
-                "transform": [{"type": "geoshape", "projection": "projection"}],
+                "transform": [
+                    {
+                        "type": "geoshape",
+                        "projection": "projection"
+                    }
+                ]
             }
         ],
         "scales": [
             {
                 "name": "color",
                 "type": "linear",
-                "domain": [map_happiness_min, map_happiness_max],
-                "range": ["#F4ECF7", "#E2C7EA", "#C89ED8", "#A96CBF", "#7B2D8B"],
+                "domain": [
+                    map_happiness_min,
+                    map_happiness_max
+                ],
+                "range": [
+                    "#F4ECF7",
+                    "#E2C7EA",
+                    "#C89ED8",
+                    "#A96CBF",
+                    "#7B2D8B"
+                ]
             }
-        ],
+        ]
     }
 
     map_html = f"""
@@ -445,15 +418,15 @@ else:
 
         .world-happiness-map-shell {{
             width: 100%;
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             position: relative;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         }}
 
         .world-happiness-legend {{
-            width: min(520px, 80%);
-            margin: 2px auto 8px auto;
-            font-size: 12px;
+            width: min(560px, 82%);
+            margin: 0 auto 10px auto;
             color: #374151;
+            font-size: 12px;
         }}
 
         .world-happiness-legend-labels {{
@@ -480,7 +453,7 @@ else:
 
         #world-happiness-map {{
             width: 100%;
-            min-width: 0;
+            height: 500px;
         }}
 
         #world-happiness-map canvas,
@@ -494,7 +467,7 @@ else:
             z-index: 20;
             display: none;
             max-width: 260px;
-            background: rgba(255, 255, 255, 0.94);
+            background: rgba(255, 255, 255, 0.95);
             color: #111827;
             border: 1px solid rgba(17, 24, 39, 0.12);
             border-radius: 6px;
@@ -602,7 +575,7 @@ else:
             }});
 
             const resizeMap = () => {{
-                const width = Math.max(320, Math.floor(mount.clientWidth));
+                const width = Math.max(360, Math.floor(mount.clientWidth));
                 view.width(width).height(500).runAsync();
             }};
 
@@ -628,8 +601,11 @@ else:
     </script>
     """
 
-    components.html(map_html, height=565, scrolling=False)
-    st.caption("Tip: hold Ctrl on Windows/Linux or Cmd on Mac while scrolling to zoom; drag to pan.")
+    components.html(
+        map_html,
+        height=555,
+        scrolling=False
+    )
 
 # -----------------------------
 # Section 2: Happiness trends
