@@ -259,6 +259,33 @@ if not country_map_data.empty:
 
 world_countries_url = alt.datasets.url("world_110m")
 
+# Give filtered views a useful starting position instead of leaving the
+# selected region as a small patch inside a full-world map.
+focus_group = geographic_group
+if not focus_group and subregion:
+    matching_groups = (
+        df.loc[df["Region_Standardized"] == subregion, "Geographic_Group"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+    if matching_groups:
+        focus_group = matching_groups[0]
+
+MAP_VIEW_PRESETS = {
+    "Africa": {"scale": 220, "rotate_x": -20, "center_y": 2},
+    "Asia": {"scale": 165, "rotate_x": -85, "center_y": 28},
+    "Europe": {"scale": 310, "rotate_x": -15, "center_y": 52},
+    "Latin America & Caribbean": {"scale": 190, "rotate_x": 70, "center_y": -12},
+    "North America": {"scale": 205, "rotate_x": 105, "center_y": 42},
+    "Oceania": {"scale": 285, "rotate_x": -145, "center_y": -24},
+}
+map_view = MAP_VIEW_PRESETS.get(
+    focus_group,
+    {"scale": 100, "rotate_x": 0, "center_y": 0}
+)
+inactive_country_fill = "rgba(229, 231, 235, 0.20)" if (geographic_group or subregion) else "#EFEFEF"
+
 if country_map_data.empty:
     st.info("No country data available for the selected filters.")
 else:
@@ -270,11 +297,11 @@ else:
         "height": 520,
         "autosize": "none",
         "signals": [
-            {"name": "tx", "update": "width / 2 - 160"},
-            {"name": "ty", "update": "height / 2 + 20"},
+            {"name": "tx", "update": "width / 2"},
+            {"name": "ty", "update": "height / 2"},
             {
                 "name": "scale",
-                "value": 100,
+                "value": map_view["scale"],
                 "on": [
                     {
                         "events": {"type": "wheel", "filter": "event.ctrlKey || event.metaKey", "consume": True},
@@ -287,8 +314,8 @@ else:
             {"name": "start", "value": None, "on": [{"events": "pointerdown", "update": "invert(cloned, xy())"}]},
             {"name": "drag", "value": None, "on": [{"events": "[pointerdown, window:pointerup] > window:pointermove", "update": "invert(cloned, xy())"}]},
             {"name": "delta", "value": None, "on": [{"events": {"signal": "drag"}, "update": "[drag[0] - start[0], start[1] - drag[1]]"}]},
-            {"name": "rotateX", "value": 0, "on": [{"events": {"signal": "delta"}, "update": "angles[0] + delta[0]"}]},
-            {"name": "centerY", "value": 0, "on": [{"events": {"signal": "delta"}, "update": "clamp(angles[1] + delta[1], -60, 60)"}]},
+            {"name": "rotateX", "value": map_view["rotate_x"], "on": [{"events": {"signal": "delta"}, "update": "angles[0] + delta[0]"}]},
+            {"name": "centerY", "value": map_view["center_y"], "on": [{"events": {"signal": "delta"}, "update": "clamp(angles[1] + delta[1], -60, 60)"}]},
         ],
         "projections": [
             {
@@ -297,7 +324,7 @@ else:
                 "scale": {"signal": "scale"},
                 "rotate": [{"signal": "rotateX"}, 0, 0],
                 "center": [0, {"signal": "centerY"}],
-                "translate": [{"signal": "tx"}, {"signal": "ty + 58"}],
+                "translate": [{"signal": "tx"}, {"signal": "ty"}],
             }
         ],
         "data": [
@@ -327,7 +354,7 @@ else:
                         "strokeWidth": {"value": 0.5},
                         "stroke": {"value": "white"},
                         "fill": {
-                            "signal": "datum.avg_happiness == null ? '#EFEFEF' : scale('color', datum.avg_happiness)"
+                            "signal": f"datum.avg_happiness == null ? '{inactive_country_fill}' : scale('color', datum.avg_happiness)"
                         },
                         "tooltip": {
                             "signal": "datum.avg_happiness == null ? null : {'Country': datum.Country, 'Avg happiness': format(datum.avg_happiness, '.2f'), 'World region': datum.world_region, 'Subregion': datum.subregion}"
@@ -355,11 +382,15 @@ else:
                 display: flex;
                 align-items: flex-start;
                 gap: 18px;
+                width: 100%;
+                overflow: hidden;
             }}
             .world-happiness-map-shell #world-happiness-map {{
-                flex: 1 1 auto;
+                flex: 1 1 0;
+                width: 100%;
                 margin-top: 0;
                 min-width: 0;
+                overflow: hidden;
             }}
             .world-happiness-legend {{
                 display: flex;
@@ -433,6 +464,26 @@ else:
                 text-align: right;
                 font-weight: 500;
             }}
+            @media (max-width: 700px) {{
+                .world-happiness-map-shell {{
+                    flex-direction: column;
+                    gap: 8px;
+                }}
+                .world-happiness-legend {{
+                    width: 100%;
+                    flex: 0 0 auto;
+                    align-items: center;
+                }}
+                .world-happiness-legend-row {{
+                    flex-direction: row-reverse;
+                    justify-content: center;
+                }}
+                .world-happiness-legend-bar {{
+                    width: min(240px, 55vw);
+                    height: 14px;
+                    background: linear-gradient(to right, #F4ECF7 0%, #E2C7EA 25%, #C89ED8 50%, #A96CBF 75%, #7B2D8B 100%);
+                }}
+            }}
         </style>
         <div class="world-happiness-map-shell">
             <div id="world-happiness-map"></div>
@@ -464,33 +515,55 @@ else:
             try {{
                 const spec = {json.dumps(map_spec)};
                 const runtime = vega.parse(spec);
-                                const view = new vega.View(runtime, {{
-                                        renderer: 'canvas',
-                                        container: '#world-happiness-map',
-                                        hover: true,
-                                        tooltip: function(handler, event, item, value) {{
-                                                if (!value) {{
-                                                        tooltip.style.display = 'none';
-                                                        return;
-                                                }}
+                const view = new vega.View(runtime, {{
+                    renderer: 'canvas',
+                    container: '#world-happiness-map',
+                    hover: true,
+                    tooltip: function(handler, event, item, value) {{
+                        if (!value) {{
+                            tooltip.style.display = 'none';
+                            return;
+                        }}
 
-                                                formatTooltip(value);
-                                                tooltip.style.display = 'block';
-                                                const rect = mount.getBoundingClientRect();
-                                                const x = event.clientX - rect.left + 14;
-                                                const y = event.clientY - rect.top + 14;
-                                                tooltip.style.left = x + 'px';
-                                                tooltip.style.top = y + 'px';
-                                        }}
-                                }});
-                view.runAsync().catch((error) => {{
-                    mount.innerHTML = '<pre style="color:#b00020; white-space:pre-wrap;">' + String(error && error.stack ? error.stack : error) + '</pre>';
+                        formatTooltip(value);
+                        tooltip.style.display = 'block';
+                        const rect = mount.getBoundingClientRect();
+                        const x = event.clientX - rect.left + 14;
+                        const y = event.clientY - rect.top + 14;
+                        tooltip.style.left = x + 'px';
+                        tooltip.style.top = y + 'px';
+                    }}
                 }});
-                                mount.addEventListener('mouseleave', () => {{
-                                        tooltip.style.display = 'none';
-                                }});
+
+                let lastWidth = 0;
+                const resizeMap = () => {{
+                    const nextWidth = Math.max(320, Math.floor(mount.clientWidth));
+                    if (Math.abs(nextWidth - lastWidth) < 2) return;
+                    lastWidth = nextWidth;
+                    view.width(nextWidth).runAsync().catch((error) => {{
+                        mount.innerHTML = '<pre style="color:#b00020; white-space:pre-wrap;">' +
+                            String(error && error.stack ? error.stack : error) + '</pre>';
+                    }});
+                }};
+
+                view.runAsync().then(() => {{
+                    resizeMap();
+                    const observer = new ResizeObserver(() => {{
+                        window.requestAnimationFrame(resizeMap);
+                    }});
+                    observer.observe(mount);
+                    window.addEventListener('resize', resizeMap);
+                }}).catch((error) => {{
+                    mount.innerHTML = '<pre style="color:#b00020; white-space:pre-wrap;">' +
+                        String(error && error.stack ? error.stack : error) + '</pre>';
+                }});
+
+                mount.addEventListener('mouseleave', () => {{
+                    tooltip.style.display = 'none';
+                }});
             }} catch (error) {{
-                mount.innerHTML = '<pre style="color:#b00020; white-space:pre-wrap;">' + String(error && error.stack ? error.stack : error) + '</pre>';
+                mount.innerHTML = '<pre style="color:#b00020; white-space:pre-wrap;">' +
+                    String(error && error.stack ? error.stack : error) + '</pre>';
             }}
     </script>
     """
@@ -1185,4 +1258,3 @@ st.caption(
     "The World Happiness Report is published by the Wellbeing Research Centre at the University of Oxford "
     "in partnership with Gallup, the UN Sustainable Development Solutions Network, and an independent editorial board."
 )
-
