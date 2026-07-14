@@ -259,6 +259,37 @@ if not country_map_data.empty:
 
 world_countries_url = alt.datasets.url("world_110m")
 
+# Choose a sensible starting view for the selected region.
+# Streamlit reruns this section whenever the sidebar filters change.
+focus_group = geographic_group
+
+if not focus_group and subregion:
+    matching_groups = (
+        df.loc[
+            df["Region_Standardized"] == subregion,
+            "Geographic_Group"
+        ]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+    if matching_groups:
+        focus_group = matching_groups[0]
+
+MAP_VIEW_PRESETS = {
+    "Africa": {"scale": 210, "rotate_x": -20, "center_y": 2},
+    "Asia": {"scale": 150, "rotate_x": -85, "center_y": 28},
+    "Europe": {"scale": 260, "rotate_x": -15, "center_y": 50},
+    "Latin America & Caribbean": {"scale": 170, "rotate_x": 70, "center_y": -12},
+    "North America": {"scale": 180, "rotate_x": 105, "center_y": 42},
+    "Oceania": {"scale": 170, "rotate_x": -145, "center_y": -25},
+}
+
+map_view = MAP_VIEW_PRESETS.get(
+    focus_group,
+    {"scale": 160, "rotate_x": 0, "center_y": 0}
+)
+
 if country_map_data.empty:
     st.info("No country data available for the selected filters.")
 else:
@@ -266,15 +297,15 @@ else:
     map_spec = {
         "$schema": "https://vega.github.io/schema/vega/v6.json",
         "description": "Interactive world happiness choropleth with pan and zoom.",
-        "width": 900,
-        "height": 520,
+        "width": 1040,
+        "height": 600,
         "autosize": "none",
         "signals": [
-            {"name": "tx", "update": "width / 2 - 160"},
-            {"name": "ty", "update": "height / 2 + 20"},
+            {"name": "tx", "update": "width / 2"},
+            {"name": "ty", "update": "height / 2 + 10"},
             {
                 "name": "scale",
-                "value": 100,
+                "value": map_view["scale"],
                 "on": [
                     {
                         "events": {"type": "wheel", "filter": "event.ctrlKey || event.metaKey", "consume": True},
@@ -287,8 +318,8 @@ else:
             {"name": "start", "value": None, "on": [{"events": "pointerdown", "update": "invert(cloned, xy())"}]},
             {"name": "drag", "value": None, "on": [{"events": "[pointerdown, window:pointerup] > window:pointermove", "update": "invert(cloned, xy())"}]},
             {"name": "delta", "value": None, "on": [{"events": {"signal": "drag"}, "update": "[drag[0] - start[0], start[1] - drag[1]]"}]},
-            {"name": "rotateX", "value": 0, "on": [{"events": {"signal": "delta"}, "update": "angles[0] + delta[0]"}]},
-            {"name": "centerY", "value": 0, "on": [{"events": {"signal": "delta"}, "update": "clamp(angles[1] + delta[1], -60, 60)"}]},
+            {"name": "rotateX", "value": map_view["rotate_x"], "on": [{"events": {"signal": "delta"}, "update": "angles[0] + delta[0]"}]},
+            {"name": "centerY", "value": map_view["center_y"], "on": [{"events": {"signal": "delta"}, "update": "clamp(angles[1] + delta[1], -60, 60)"}]},
         ],
         "projections": [
             {
@@ -297,7 +328,7 @@ else:
                 "scale": {"signal": "scale"},
                 "rotate": [{"signal": "rotateX"}, 0, 0],
                 "center": [0, {"signal": "centerY"}],
-                "translate": [{"signal": "tx"}, {"signal": "ty + 58"}],
+                "translate": [{"signal": "tx"}, {"signal": "ty"}],
             }
         ],
         "data": [
@@ -495,7 +526,7 @@ else:
     </script>
     """
 
-    components.html(map_html, height=580, scrolling=False)
+    components.html(map_html, height=660, scrolling=False)
     st.caption("Tip: hold Ctrl on Windows/Linux or Cmd on Mac while scrolling to zoom; drag to pan.")
 
 # -----------------------------
