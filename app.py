@@ -286,7 +286,7 @@ else:
         alt.Chart(world)
         .mark_geoshape(
             stroke="white",
-            strokeWidth=0.6
+            strokeWidth=0.65
         )
         .transform_lookup(
             lookup="id",
@@ -307,7 +307,6 @@ else:
         .encode(
             color=alt.Color(
                 "avg_happiness:Q",
-                title="Average happiness",
                 scale=alt.Scale(
                     range=[
                         "#F4ECF7",
@@ -317,13 +316,7 @@ else:
                         "#7B2D8B"
                     ]
                 ),
-                legend=alt.Legend(
-                    orient="top",
-                    direction="horizontal",
-                    gradientLength=420,
-                    gradientThickness=14,
-                    titleAnchor="middle"
-                )
+                legend=None
             ),
             tooltip=[
                 alt.Tooltip(
@@ -349,14 +342,50 @@ else:
             type="naturalEarth1"
         )
         .properties(
-            height=500
+            height=540
         )
     )
 
-    st.altair_chart(
-        map_chart,
-        use_container_width=True
-    )
+    map_column, spacer_column = st.columns([4, 1])
+
+    with map_column:
+        st.markdown(
+            """
+            <div style="max-width: 620px; margin: 0 0 6px 0;">
+                <div style="
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 5px;
+                    font-size: 0.82rem;
+                    font-weight: 600;
+                    color: #4b5563;
+                ">
+                    <span>Lower happiness</span>
+                    <span>Higher happiness</span>
+                </div>
+                <div style="
+                    width: 100%;
+                    height: 16px;
+                    border-radius: 999px;
+                    background: linear-gradient(
+                        to right,
+                        #F4ECF7 0%,
+                        #E2C7EA 25%,
+                        #C89ED8 50%,
+                        #A96CBF 75%,
+                        #7B2D8B 100%
+                    );
+                    border: 1px solid rgba(0, 0, 0, 0.08);
+                "></div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        st.altair_chart(
+            map_chart,
+            use_container_width=True
+        )
 
     if geographic_group or subregion:
         st.caption(
