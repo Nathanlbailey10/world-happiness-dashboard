@@ -226,13 +226,20 @@ st.markdown(
 )
 
 map_data = df[df["Year"].between(start_year, end_year)].copy()
+
 if geographic_group:
-    map_data = map_data[map_data["Geographic_Group"] == geographic_group]
+    map_data = map_data[
+        map_data["Geographic_Group"] == geographic_group
+    ]
+
 if subregion:
-    map_data = map_data[map_data["Region_Standardized"] == subregion]
+    map_data = map_data[
+        map_data["Region_Standardized"] == subregion
+    ]
 
 country_map_data = (
-    map_data.groupby("Country_Standardized", as_index=False)
+    map_data
+    .groupby("Country_Standardized", as_index=False)
     .agg(
         {
             "Happiness score": "mean",
@@ -240,372 +247,125 @@ country_map_data = (
             "Region_Standardized": "first"
         }
     )
-    .rename(columns={
-        "Country_Standardized": "Country",
-        "Happiness score": "avg_happiness",
-        "Geographic_Group": "world_region",
-        "Region_Standardized": "subregion"
-    })
+    .rename(
+        columns={
+            "Country_Standardized": "Country",
+            "Happiness score": "avg_happiness",
+            "Geographic_Group": "world_region",
+            "Region_Standardized": "subregion"
+        }
+    )
 )
 
-country_map_data["country_code"] = country_map_data["Country"].apply(
-    country_name_to_numeric_code
+country_map_data["country_code"] = (
+    country_map_data["Country"]
+    .apply(country_name_to_numeric_code)
 )
-country_map_data = country_map_data.dropna(subset=["country_code"]).copy()
 
-if not country_map_data.empty:
-    country_map_data["country_code"] = country_map_data["country_code"].astype(int)
-    map_happiness_min = float(country_map_data["avg_happiness"].min())
-    map_happiness_max = float(country_map_data["avg_happiness"].max())
-
-    if map_happiness_min == map_happiness_max:
-        map_happiness_min -= 0.01
-        map_happiness_max += 0.01
-
-world_countries_url = alt.datasets.url("world_110m")
-filtered_map_view = bool(geographic_group or subregion)
+country_map_data = (
+    country_map_data
+    .dropna(subset=["country_code"])
+    .copy()
+)
 
 if country_map_data.empty:
     st.info("No country data available for the selected filters.")
+
 else:
-    world_data = country_map_data.to_dict(orient="records")
-
-    fit_transform = []
-    if filtered_map_view:
-        fit_transform = [
-            {
-                "type": "filter",
-                "expr": "datum.avg_happiness != null"
-            }
-        ]
-
-    map_spec = {
-        "$schema": "https://vega.github.io/schema/vega/v6.json",
-        "description": "Responsive world happiness choropleth.",
-        "width": 900,
-        "height": 500,
-        "autosize": "none",
-        "padding": 0,
-        "data": [
-            {
-                "name": "country_data",
-                "values": world_data
-            },
-            {
-                "name": "world",
-                "url": world_countries_url,
-                "format": {
-                    "type": "topojson",
-                    "feature": "countries"
-                },
-                "transform": [
-                    {
-                        "type": "lookup",
-                        "from": "country_data",
-                        "key": "country_code",
-                        "fields": ["id"],
-                        "values": [
-                            "Country",
-                            "avg_happiness",
-                            "world_region",
-                            "subregion"
-                        ],
-                        "as": [
-                            "Country",
-                            "avg_happiness",
-                            "world_region",
-                            "subregion"
-                        ]
-                    }
-                ]
-            },
-            {
-                "name": "fit_world",
-                "source": "world",
-                "transform": fit_transform
-            }
-        ],
-        "projections": [
-            {
-                "name": "projection",
-                "type": "naturalEarth1",
-                "fit": {
-                    "signal": "data('fit_world')"
-                },
-                "extent": [
-                    [24, 18],
-                    [
-                        {"signal": "width - 24"},
-                        {"signal": "height - 18"}
-                    ]
-                ]
-            }
-        ],
-        "marks": [
-            {
-                "type": "shape",
-                "from": {
-                    "data": "world"
-                },
-                "encode": {
-                    "enter": {
-                        "strokeWidth": {
-                            "value": 0.55
-                        },
-                        "stroke": {
-                            "value": "white"
-                        },
-                        "fill": {
-                            "signal": (
-                                "datum.avg_happiness == null "
-                                "? '#F0F0F0' "
-                                ": scale('color', datum.avg_happiness)"
-                            )
-                        },
-                        "fillOpacity": {
-                            "signal": (
-                                "datum.avg_happiness == null "
-                                f"? {0.10 if filtered_map_view else 1.0} "
-                                ": 1"
-                            )
-                        },
-                        "tooltip": {
-                            "signal": (
-                                "datum.avg_happiness == null ? null : "
-                                "{'Country': datum.Country, "
-                                "'Avg happiness': format(datum.avg_happiness, '.2f'), "
-                                "'World region': datum.world_region, "
-                                "'Subregion': datum.subregion}"
-                            )
-                        }
-                    }
-                },
-                "transform": [
-                    {
-                        "type": "geoshape",
-                        "projection": "projection"
-                    }
-                ]
-            }
-        ],
-        "scales": [
-            {
-                "name": "color",
-                "type": "linear",
-                "domain": [
-                    map_happiness_min,
-                    map_happiness_max
-                ],
-                "range": [
-                    "#F4ECF7",
-                    "#E2C7EA",
-                    "#C89ED8",
-                    "#A96CBF",
-                    "#7B2D8B"
-                ]
-            }
-        ]
-    }
-
-    map_html = f"""
-    <style>
-        html, body {{
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            overflow: hidden;
-        }}
-
-        .world-happiness-map-shell {{
-            width: 100%;
-            position: relative;
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        }}
-
-        .world-happiness-legend {{
-            width: min(560px, 82%);
-            margin: 0 auto 10px auto;
-            color: #374151;
-            font-size: 12px;
-        }}
-
-        .world-happiness-legend-labels {{
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
-            font-weight: 600;
-        }}
-
-        .world-happiness-legend-bar {{
-            width: 100%;
-            height: 14px;
-            border-radius: 999px;
-            background: linear-gradient(
-                to right,
-                #F4ECF7 0%,
-                #E2C7EA 25%,
-                #C89ED8 50%,
-                #A96CBF 75%,
-                #7B2D8B 100%
-            );
-            border: 1px solid rgba(0, 0, 0, 0.08);
-        }}
-
-        #world-happiness-map {{
-            width: 100%;
-            height: 500px;
-        }}
-
-        #world-happiness-map canvas,
-        #world-happiness-map svg {{
-            display: block;
-        }}
-
-        .world-happiness-tooltip {{
-            position: absolute;
-            pointer-events: none;
-            z-index: 20;
-            display: none;
-            max-width: 260px;
-            background: rgba(255, 255, 255, 0.95);
-            color: #111827;
-            border: 1px solid rgba(17, 24, 39, 0.12);
-            border-radius: 6px;
-            padding: 8px 10px;
-            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.14);
-            font-size: 12px;
-            line-height: 1.3;
-        }}
-
-        .world-happiness-tooltip-title {{
-            display: block;
-            margin-bottom: 6px;
-            font-size: 13px;
-            font-weight: 600;
-        }}
-
-        .world-happiness-tooltip-row {{
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            margin-top: 2px;
-        }}
-
-        .world-happiness-tooltip-label {{
-            color: #6b7280;
-            white-space: nowrap;
-        }}
-
-        .world-happiness-tooltip-value {{
-            text-align: right;
-            font-weight: 500;
-        }}
-    </style>
-
-    <div class="world-happiness-map-shell">
-        <div class="world-happiness-legend" aria-label="Happiness score legend">
-            <div class="world-happiness-legend-labels">
-                <span>Lower happiness</span>
-                <span>Higher happiness</span>
-            </div>
-            <div class="world-happiness-legend-bar"></div>
-        </div>
-
-        <div id="world-happiness-map"></div>
-        <div id="world-happiness-tooltip" class="world-happiness-tooltip"></div>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/vega@6"></script>
-    <script>
-        const mount = document.getElementById('world-happiness-map');
-        const tooltip = document.getElementById('world-happiness-tooltip');
-
-        const formatTooltip = (value) => {{
-            if (value == null) {{
-                tooltip.style.display = 'none';
-                return;
-            }}
-
-            const rows = [];
-            if (value['Avg happiness'] != null) {{
-                rows.push(['Avg happiness', value['Avg happiness']]);
-            }}
-            if (value['World region']) {{
-                rows.push(['World region', value['World region']]);
-            }}
-            if (value.Subregion) {{
-                rows.push(['Subregion', value.Subregion]);
-            }}
-
-            tooltip.innerHTML =
-                '<div class="world-happiness-tooltip-title">' +
-                value.Country +
-                '</div>' +
-                rows.map(([label, rowValue]) =>
-                    '<div class="world-happiness-tooltip-row">' +
-                    '<span class="world-happiness-tooltip-label">' + label + '</span>' +
-                    '<span class="world-happiness-tooltip-value">' + rowValue + '</span>' +
-                    '</div>'
-                ).join('');
-        }};
-
-        try {{
-            const spec = {json.dumps(map_spec)};
-            const runtime = vega.parse(spec);
-
-            const view = new vega.View(runtime, {{
-                renderer: 'canvas',
-                container: '#world-happiness-map',
-                hover: true,
-                tooltip: function(handler, event, item, value) {{
-                    if (!value) {{
-                        tooltip.style.display = 'none';
-                        return;
-                    }}
-
-                    formatTooltip(value);
-                    tooltip.style.display = 'block';
-
-                    const shell = document.querySelector('.world-happiness-map-shell');
-                    const rect = shell.getBoundingClientRect();
-
-                    tooltip.style.left = (event.clientX - rect.left + 14) + 'px';
-                    tooltip.style.top = (event.clientY - rect.top + 14) + 'px';
-                }}
-            }});
-
-            const resizeMap = () => {{
-                const width = Math.max(360, Math.floor(mount.clientWidth));
-                view.width(width).height(500).runAsync();
-            }};
-
-            view.runAsync().then(resizeMap).catch((error) => {{
-                mount.innerHTML =
-                    '<pre style="color:#b00020; white-space:pre-wrap;">' +
-                    String(error && error.stack ? error.stack : error) +
-                    '</pre>';
-            }});
-
-            const observer = new ResizeObserver(resizeMap);
-            observer.observe(mount);
-
-            mount.addEventListener('mouseleave', () => {{
-                tooltip.style.display = 'none';
-            }});
-        }} catch (error) {{
-            mount.innerHTML =
-                '<pre style="color:#b00020; white-space:pre-wrap;">' +
-                String(error && error.stack ? error.stack : error) +
-                '</pre>';
-        }}
-    </script>
-    """
-
-    components.html(
-        map_html,
-        height=555,
-        scrolling=False
+    country_map_data["country_code"] = (
+        country_map_data["country_code"]
+        .astype(int)
     )
+
+    world = alt.topo_feature(
+        alt.datasets.url("world_110m"),
+        "countries"
+    )
+
+    map_chart = (
+        alt.Chart(world)
+        .mark_geoshape(
+            stroke="white",
+            strokeWidth=0.6
+        )
+        .transform_lookup(
+            lookup="id",
+            from_=alt.LookupData(
+                country_map_data,
+                "country_code",
+                [
+                    "Country",
+                    "avg_happiness",
+                    "world_region",
+                    "subregion"
+                ]
+            )
+        )
+        .transform_filter(
+            "isValid(datum.avg_happiness)"
+        )
+        .encode(
+            color=alt.Color(
+                "avg_happiness:Q",
+                title="Average happiness",
+                scale=alt.Scale(
+                    range=[
+                        "#F4ECF7",
+                        "#E2C7EA",
+                        "#C89ED8",
+                        "#A96CBF",
+                        "#7B2D8B"
+                    ]
+                ),
+                legend=alt.Legend(
+                    orient="top",
+                    direction="horizontal",
+                    gradientLength=420,
+                    gradientThickness=14,
+                    titleAnchor="middle"
+                )
+            ),
+            tooltip=[
+                alt.Tooltip(
+                    "Country:N",
+                    title="Country"
+                ),
+                alt.Tooltip(
+                    "avg_happiness:Q",
+                    title="Avg happiness",
+                    format=".2f"
+                ),
+                alt.Tooltip(
+                    "world_region:N",
+                    title="World region"
+                ),
+                alt.Tooltip(
+                    "subregion:N",
+                    title="Subregion"
+                )
+            ]
+        )
+        .project(
+            type="naturalEarth1"
+        )
+        .properties(
+            height=500
+        )
+    )
+
+    st.altair_chart(
+        map_chart,
+        use_container_width=True
+    )
+
+    if geographic_group or subregion:
+        st.caption(
+            "The map automatically reframes to keep the full selected area visible."
+        )
+    else:
+        st.caption(
+            "The full world is shown on initial load."
+        )
 
 # -----------------------------
 # Section 2: Happiness trends
