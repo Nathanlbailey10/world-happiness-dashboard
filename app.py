@@ -298,14 +298,18 @@ else:
         "autosize": "none",
         "signals": [
             {"name": "tx", "update": "width / 2"},
-            {"name": "ty", "update": "height / 2"},
+            {"name": "ty", "update": "height / 2 + 10"},
             {
-                "name": "scale",
-                "value": map_view["scale"],
+                "name": "baseScale",
+                "update": "clamp(width / 5.8, 100, 240)"
+            },
+            {
+                "name": "zoom",
+                "value": map_view["scale"] / 100,
                 "on": [
                     {
                         "events": {"type": "wheel", "filter": "event.ctrlKey || event.metaKey", "consume": True},
-                        "update": "clamp(scale * pow(1.0005, -event.deltaY * pow(16, event.deltaMode)), 40, 3000)"
+                        "update": "clamp(zoom * pow(1.0005, -event.deltaY * pow(16, event.deltaMode)), 0.25, 20)"
                     }
                 ]
             },
@@ -321,7 +325,7 @@ else:
             {
                 "name": "projection",
                 "type": "mercator",
-                "scale": {"signal": "scale"},
+                "scale": {"signal": "clamp(baseScale * zoom, 40, 3000)"},
                 "rotate": [{"signal": "rotateX"}, 0, 0],
                 "center": [0, {"signal": "centerY"}],
                 "translate": [{"signal": "tx"}, {"signal": "ty"}],
