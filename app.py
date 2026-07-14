@@ -1,4 +1,3 @@
-
 import json
 import streamlit as st
 import pandas as pd
@@ -268,7 +267,7 @@ else:
         "$schema": "https://vega.github.io/schema/vega/v6.json",
         "description": "Interactive world happiness choropleth with pan and zoom.",
         "width": 900,
-        "height": 500,
+        "height": 520,
         "autosize": "none",
         "signals": [
             {"name": "tx", "update": "width / 2 - 160"},
@@ -496,7 +495,7 @@ else:
     </script>
     """
 
-    components.html(map_html, height=560, scrolling=False)
+    components.html(map_html, height=580, scrolling=False)
     st.caption("Tip: hold Ctrl on Windows/Linux or Cmd on Mac while scrolling to zoom; drag to pan.")
 
 # -----------------------------
@@ -1186,3 +1185,4 @@ st.caption(
     "The World Happiness Report is published by the Wellbeing Research Centre at the University of Oxford "
     "in partnership with Gallup, the UN Sustainable Development Solutions Network, and an independent editorial board."
 )
+
